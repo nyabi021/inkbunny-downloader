@@ -2,21 +2,13 @@ import sys
 import os
 import asyncio
 import aiohttp
-import logging
-import hashlib
-import base64
-import binascii
 import json
 import re
 import unicodedata
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QLineEdit, QPushButton, 
@@ -27,65 +19,18 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings, QSize
 from PyQt6.QtGui import QFont, QIntValidator, QIcon
 
 
-def setup_logging():
-    if os.name == 'nt':  # Windows
-        base_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Inkbunny', 'Downloader', 'Logs')
-    elif os.name == 'posix':  # Linux/macOS
-        if sys.platform == 'darwin':  # macOS
-            base_dir = str(Path.home() / 'Library' / 'Application Support' / 'Inkbunny' / 'Downloader' / 'Logs')
-        else:  # Linux
-            base_dir = str(Path.home() / '.local' / 'share' / 'inkbunny-downloader' / 'logs')
-    else:
-        base_dir = str(Path.home() / 'InkbunnyLogs')
-
-    os.makedirs(base_dir, exist_ok=True)
-    
-    log_filename = os.path.join(base_dir, datetime.now().strftime('%Y%m%d_%H%M%S.log'))
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_filename),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger(__name__)
-
-logger = setup_logging()
-
-
 class SecureStorage:
     def __init__(self):
-        self.salt = b'inkbunny_downloader_salt'
-        self.iterations = 100000
-        
-        # 머신 고유 정보로 키 생성(운영체제, 사용자 이름 등)
-        machine_info = f"{os.name}_{os.getlogin() if hasattr(os, 'getlogin') else 'user'}"
-        self.key = self._derive_key(machine_info.encode())
-        self.cipher_suite = Fernet(self.key)
-        
-    def _derive_key(self, seed: bytes) -> bytes:
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=self.salt,
-            iterations=self.iterations,
-        )
-        key = base64.urlsafe_b64encode(kdf.derive(seed))
-        return key
+        # 간소화를 위해 암호화/복호화 로직 제거
+        pass
         
     def encrypt(self, data: str) -> str:
-        encrypted = self.cipher_suite.encrypt(data.encode())
-        return base64.urlsafe_b64encode(encrypted).decode()
+        # 간소화된 버전에서는 단순히 데이터 반환
+        return data
         
     def decrypt(self, encrypted_data: str) -> str:
-        try:
-            decrypted = self.cipher_suite.decrypt(base64.urlsafe_b64decode(encrypted_data))
-            return decrypted.decode()
-        except (binascii.Error, ValueError, Exception) as e:
-            logger.error(f"Failed to decrypt data: {str(e)}")
-            return ""
+        # 간소화된 버전에서는 단순히 데이터 반환
+        return encrypted_data
 
 
 class SettingsManager:
@@ -98,13 +43,7 @@ class SettingsManager:
         
         if remember:
             self.settings.setValue('username', username)
-            try:
-                encrypted_password = self.secure_storage.encrypt(password)
-                self.settings.setValue('password', encrypted_password)
-            except Exception as e:
-                logger.error(f"Failed to encrypt password: {str(e)}")
-                # 암호화 실패시 비밀번호 저장하지 않음
-                self.settings.remove('password')
+            self.settings.setValue('password', password)
         else:
             self.settings.remove('username')
             self.settings.remove('password')
@@ -116,14 +55,7 @@ class SettingsManager:
         
         if remember:
             username = self.settings.value('username', '')
-            encrypted_password = self.settings.value('password', '')
-            if encrypted_password:
-                try:
-                    password = self.secure_storage.decrypt(encrypted_password)
-                except Exception as e:
-                    logger.error(f"Failed to decrypt password: {str(e)}")
-                    # 복호화 실패시 비밀번호 설정 삭제
-                    self.settings.remove('password')
+            password = self.settings.value('password', '')
                     
         return username, password, remember
         
@@ -181,32 +113,6 @@ class DownloadFile:
     title: str
 
 
-class ConfigValidator:
-    @staticmethod
-    def validate_config(config: Dict[str, Any]) -> bool:
-        required_fields = {
-            'api': ['base_url', 'submissions_per_page', 'delay', 'concurrent_downloads'],
-            'credentials': ['username', 'password'],
-            'download': ['artist_username', 'save_directory', 'max_downloads']
-        }
-        
-        try:
-            for section, fields in required_fields.items():
-                if section not in config:
-                    raise ValueError(f"Missing section: {section}")
-                for field in fields:
-                    if field not in config[section]:
-                        raise ValueError(f"Missing field: {field} in section {section}")
-                        
-            if 'between_files' not in config['api']['delay'] or 'between_pages' not in config['api']['delay']:
-                raise ValueError("Missing delay configuration")
-                
-            return True
-        except ValueError as e:
-            logger.error(f"Configuration validation failed: {e}")
-            return False
-
-
 class APIClient:
     def __init__(self, api_config: APIConfig, credentials: Credentials):
         self.api_config = api_config
@@ -240,10 +146,10 @@ class APIClient:
                         if response.status == 200:
                             return await response.json()
                             
-                logger.error(f"Request failed with status {response.status}")
+                print(f"Request failed with status {response.status}")
                 
             except aiohttp.ClientError as e:
-                logger.error(f"Request attempt {attempt + 1} failed: {str(e)}")
+                print(f"Request attempt {attempt + 1} failed: {str(e)}")
                 if attempt < self.retry_count - 1:
                     await asyncio.sleep(self.retry_delay)
                     
@@ -261,10 +167,10 @@ class APIClient:
         
         if data and "sid" in data:
             self.session_id = data["sid"]
-            logger.info("Login successful!")
+            print("Login successful!")
             return True
             
-        logger.error("Login failed")
+        print("Login failed")
         return False
         
     async def get_user_id(self, username: str) -> Optional[str]:
@@ -340,24 +246,6 @@ class FileDownloader:
         self.retry_delay = retry_delay
         self.session = None
         
-        # 숨겨진 디렉토리에 다운로드 이력 저장
-        if os.name == 'nt':  # Windows
-            history_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'Inkbunny', 'Downloader', 'History')
-        elif os.name == 'posix':  # Linux/macOS
-            if sys.platform == 'darwin':  # macOS
-                history_dir = str(Path.home() / 'Library' / 'Application Support' / 'Inkbunny' / 'Downloader' / 'History')
-            else:  # Linux
-                history_dir = str(Path.home() / '.local' / 'share' / 'inkbunny-downloader' / 'history')
-        else:
-            history_dir = str(Path.home() / '.inkbunny_history')
-            
-        os.makedirs(history_dir, exist_ok=True)
-        
-        # 아티스트 이름을 해시화하여 파일명 생성
-        artist_hash = hashlib.md5(artist_username.encode()).hexdigest()[:10]
-        self.download_history_file = os.path.join(history_dir, f"dl_history_{artist_hash}.dat")
-        self.download_history = self._load_download_history()
-        
     async def initialize(self):
         self.session = aiohttp.ClientSession()
         
@@ -365,33 +253,6 @@ class FileDownloader:
         if self.session:
             await self.session.close()
             self.session = None
-            
-    def _load_download_history(self) -> Dict[str, Dict[str, Any]]:
-        if os.path.exists(self.download_history_file):
-            try:
-                with open(self.download_history_file, 'rb') as f:
-                    # 간단한 XOR 인코딩 적용해서 일반 텍스트로 노출되지 않도록 함
-                    data = f.read()
-                    if data:
-                        # XOR 디코딩 (키: 0x42)
-                        decoded_data = bytes([b ^ 0x42 for b in data])
-                        return json.loads(decoded_data)
-            except (json.JSONDecodeError, IOError, Exception) as e:
-                logger.error(f"Failed to parse download history file: {e}")
-        return {}
-        
-    def _save_download_history(self):
-        try:
-            os.makedirs(os.path.dirname(self.download_history_file), exist_ok=True)
-            
-            # JSON 데이터를 XOR 인코딩하여 저장
-            json_data = json.dumps(self.download_history, indent=None)
-            encoded_data = bytes([ord(c) ^ 0x42 for c in json_data])
-            
-            with open(self.download_history_file, 'wb') as f:
-                f.write(encoded_data)
-        except Exception as e:
-            logger.error(f"Failed to save download history: {e}")
             
     def _sanitize_filename(self, filename: str) -> str:
         # Remove invalid characters
@@ -416,7 +277,7 @@ class FileDownloader:
                 
         return sanitized
         
-    async def download_file(self, download_file: DownloadFile) -> Tuple[bool, str]:
+    async def download_file(self, download_file: DownloadFile) -> bool:
         if not self.session:
             await self.initialize()
             
@@ -428,113 +289,29 @@ class FileDownloader:
         sanitized_filename = self._sanitize_filename(download_file.filename)
         filepath = Path(artist_folder) / sanitized_filename
         
-        # Check download history
-        submission_id = download_file.submission_id
-        if submission_id in self.download_history:
-            if self.download_history[submission_id].get("completed", False):
-                logger.info(f"File already downloaded according to history: {sanitized_filename}")
-                
-                # Mark as skipped in history
-                self.download_history[submission_id]["skipped"] = True
-                self._save_download_history()
-                
-                return True, self.download_history[submission_id].get("file_hash", "")
-                
-        # Check if file exists
-        if filepath.exists():
-            logger.info(f"File already exists: {sanitized_filename}")
-            file_hash = await self._calculate_file_hash(filepath)
-            
-            # Update download history
-            self.download_history[submission_id] = {
-                "filename": sanitized_filename,
-                "url": download_file.url,
-                "completed": True,
-                "skipped": True,
-                "file_hash": file_hash,
-                "size": filepath.stat().st_size,
-                "timestamp": datetime.now().isoformat()
-            }
-            self._save_download_history()
-            
-            return True, file_hash
-            
-        # Check for partial download
-        temp_filepath = Path(f"{filepath}.part")
-        downloaded_size = 0
-        resume_download = False
-        
-        if temp_filepath.exists():
-            downloaded_size = temp_filepath.stat().st_size
-            logger.info(f"Found partial download for {sanitized_filename}, size: {downloaded_size} bytes")
-            resume_download = True
-        
+        # 히스토리 확인 코드 제거 - 항상 다운로드 시도
         for attempt in range(self.retry_count):
             try:
-                headers = {}
-                if resume_download and downloaded_size > 0:
-                    headers['Range'] = f'bytes={downloaded_size}-'
-                    
-                async with self.session.get(download_file.url, headers=headers) as response:
-                    if response.status == 200 or (resume_download and response.status == 206):
-                        mode = 'ab' if resume_download else 'wb'
-                        
-                        # Record in download history as in progress
-                        self.download_history[submission_id] = {
-                            "filename": sanitized_filename,
-                            "url": download_file.url,
-                            "completed": False,
-                            "partial_path": str(temp_filepath),
-                            "downloaded_size": downloaded_size,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        self._save_download_history()
-                        
-                        with open(temp_filepath, mode) as f:
+                async with self.session.get(download_file.url) as response:
+                    if response.status == 200:
+                        with open(filepath, 'wb') as f:
                             while True:
                                 chunk = await response.content.read(8192)
                                 if not chunk:
                                     break
                                 f.write(chunk)
                                 
-                        # Download completed, rename file
-                        temp_filepath.rename(filepath)
-                        
-                        logger.info(f"Successfully downloaded: {sanitized_filename}")
-                        file_hash = await self._calculate_file_hash(filepath)
-                        
-                        # Update download history
-                        self.download_history[submission_id] = {
-                            "filename": sanitized_filename,
-                            "url": download_file.url,
-                            "completed": True,
-                            "resumed": resume_download,
-                            "skipped": False,
-                            "file_hash": file_hash,
-                            "size": filepath.stat().st_size,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        self._save_download_history()
-                        
-                        return True, file_hash
+                        print(f"Successfully downloaded: {sanitized_filename}")
+                        return True
                     else:
-                        logger.error(f"Download failed (HTTP {response.status}): {download_file.url}")
+                        print(f"Download failed (HTTP {response.status}): {download_file.url}")
                         
             except aiohttp.ClientError as e:
-                logger.error(f"Download attempt {attempt + 1} failed: {str(e)}")
+                print(f"Download attempt {attempt + 1} failed: {str(e)}")
                 if attempt < self.retry_count - 1:
                     await asyncio.sleep(self.retry_delay)
                     
-        return False, ""
-        
-    async def _calculate_file_hash(self, filepath: Path) -> str:
-        hasher = hashlib.sha256()
-        
-        with open(filepath, "rb") as f:
-            while chunk := f.read(8192):
-                hasher.update(chunk)
-                
-        return hasher.hexdigest()
+        return False
 
 
 class DownloadTracker:
@@ -542,33 +319,19 @@ class DownloadTracker:
         self.downloaded_files = 0
         self.total_files = 0
         self.failed_downloads = 0
-        self.skipped_files = 0
-        self.resumed_downloads = 0
-        self.file_hashes = {}
         
     def add_files(self, count: int):
         self.total_files += count
         
-    def register_download(self, success: bool, file_hash: str = "", resumed: bool = False, skipped: bool = False):
+    def register_download(self, success: bool):
         if success:
-            if skipped:
-                self.skipped_files += 1
-            else:
-                self.downloaded_files += 1
-                
-            if resumed:
-                self.resumed_downloads += 1
-                
-            if file_hash:
-                self.file_hashes[file_hash] = True
+            self.downloaded_files += 1
         else:
             self.failed_downloads += 1
             
     def get_stats(self) -> Dict[str, int]:
         return {
             "downloaded": self.downloaded_files,
-            "resumed": self.resumed_downloads,
-            "skipped": self.skipped_files,
             "failed": self.failed_downloads,
             "total": self.total_files
         }
@@ -576,7 +339,7 @@ class DownloadTracker:
     def get_progress_percentage(self) -> int:
         if self.total_files == 0:
             return 0
-        return int((self.downloaded_files + self.failed_downloads + self.skipped_files) / self.total_files * 100)
+        return int((self.downloaded_files + self.failed_downloads) / self.total_files * 100)
 
 
 class DownloaderThread(QThread):
@@ -638,7 +401,7 @@ class DownloaderThread(QThread):
             
         except Exception as e:
             error_message = f"Program error: {str(e)}"
-            logger.error(error_message)
+            print(error_message)
             self.error_signal.emit(error_message)
         finally:
             # Cleanup
@@ -795,39 +558,24 @@ class DownloaderThread(QThread):
             results = await asyncio.gather(*tasks)
             
             # Process results
-            for success, file_hash in results:
-                is_resumed = False
-                is_skipped = False
-                
-                # Check if this was a resumed or skipped download
-                submission_id = batch[results.index((success, file_hash))].submission_id
-                if submission_id in self.downloader.download_history:
-                    history_entry = self.downloader.download_history[submission_id]
-                    if history_entry.get("resumed", False):
-                        is_resumed = True
-                    if history_entry.get("skipped", False):
-                        is_skipped = True
-                
-                self.tracker.register_download(success, file_hash, resumed=is_resumed, skipped=is_skipped)
+            for idx, success in enumerate(results):
+                self.tracker.register_download(success)
                 
                 if success:
                     successful_downloads += 1
-                    
-                    # Update the log with appropriate message
-                    file_name = batch[results.index((success, file_hash))].filename
-                    if is_resumed:
-                        self.progress_signal.emit(f"Resumed and completed download: {file_name}")
-                    elif is_skipped:
-                        self.progress_signal.emit(f"Skipped existing file: {file_name}")
-                    
+                    file_name = batch[idx].filename
+                    self.progress_signal.emit(f"Downloaded: {file_name}")
+                else:
+                    file_name = batch[idx].filename
+                    self.progress_signal.emit(f"Failed to download: {file_name}")
+            
             # Update progress
             stats = self.tracker.get_stats()
             self.progress_signal.emit(
-                f"Progress: {stats['downloaded']} downloaded, {stats['resumed']} resumed, "
-                f"{stats['skipped']} skipped, {stats['failed']} failed"
+                f"Progress: {stats['downloaded']} downloaded, {stats['failed']} failed"
             )
             self.progress_update.emit(
-                self.tracker.downloaded_files + self.tracker.skipped_files,
+                self.tracker.downloaded_files,
                 self.tracker.total_files,
                 self.tracker.get_progress_percentage()
             )
@@ -1427,8 +1175,6 @@ class MainWindow(QMainWindow):
                 f"\nDownload Summary:\n"
                 f"- Total files processed: {stats['total']}\n"
                 f"- Successfully downloaded: {stats['downloaded']}\n"
-                f"- Resumed and completed: {stats['resumed']}\n"
-                f"- Skipped (already exists): {stats['skipped']}\n"
                 f"- Failed: {stats['failed']}"
             )
             self.progress_display.append(summary)
