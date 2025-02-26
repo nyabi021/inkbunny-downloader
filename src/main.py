@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings, QSize
 from PyQt6.QtGui import QFont, QIntValidator, QIcon
 
-# 인증 정보 암호화/복호화 (간소화된 버전)
+# Credential encryption/decryption (simplified version)
 class SecureStorage:
     def __init__(self):
         pass
@@ -29,7 +29,7 @@ class SecureStorage:
     def decrypt(self, encrypted_data: str) -> str:
         return encrypted_data
 
-# 설정 관리 클래스
+# Settings management class
 class SettingsManager:
     def __init__(self):
         self.settings = QSettings('InkbunnyDownloader', 'Settings')
@@ -72,7 +72,7 @@ class SettingsManager:
         theme = self.settings.value('theme', 'light')
         return use_system_theme, theme
 
-# 데이터 클래스 정의
+# Data class definitions
 @dataclass
 class APIConfig:
     base_url: str
@@ -98,7 +98,7 @@ class DownloadFile:
     submission_id: str
     title: str
 
-# Inkbunny API 클라이언트
+# Inkbunny API client
 class APIClient:
     def __init__(self, api_config: APIConfig, credentials: Credentials):
         self.api_config = api_config
@@ -204,7 +204,7 @@ class APIClient:
             return data.get("submissions", [])
         return []
 
-# 파일 다운로더
+# File downloader
 class FileDownloader:
     def __init__(self, save_directory: str, artist_username: str, retry_count: int = 3, retry_delay: int = 5):
         self.save_directory = save_directory
@@ -263,7 +263,7 @@ class FileDownloader:
                     await asyncio.sleep(self.retry_delay)
         return False
 
-# 다운로드 진행 상황 추적
+# Download progress tracker
 class DownloadTracker:
     def __init__(self):
         self.downloaded_files = 0
@@ -291,7 +291,7 @@ class DownloadTracker:
             return 0
         return int((self.downloaded_files + self.failed_downloads) / self.total_files * 100)
 
-# 다운로드 스레드
+# Download thread
 class DownloaderThread(QThread):
     progress_signal = pyqtSignal(str)
     progress_update = pyqtSignal(int, int, int)
@@ -445,7 +445,7 @@ class DownloaderThread(QThread):
     def stop(self):
         self.running = False
 
-# 테마 관리 클래스
+# Theme management class
 class ThemeManager:
     def __init__(self):
         self.settings_manager = SettingsManager()
@@ -508,7 +508,7 @@ class ThemeManager:
                 QTabBar::tab:selected {background-color: #343a40;}
             """
 
-# 로그인 탭
+# Login tab
 class LoginTab(QWidget):
     def __init__(self, settings_manager):
         super().__init__()
@@ -551,7 +551,7 @@ class LoginTab(QWidget):
         username, password, remember = self.get_credentials()
         self.settings_manager.save_credentials(username, password, remember)
 
-# 다운로드 설정 탭
+# Download settings tab
 class DownloadTab(QWidget):
     def __init__(self, settings_manager):
         super().__init__()
@@ -618,7 +618,7 @@ class DownloadTab(QWidget):
         if directory:
             self.dir_input.setText(directory)
 
-# 앱 설정 탭
+# App settings tab
 class SettingsTab(QWidget):
     theme_changed = pyqtSignal()
     
@@ -666,7 +666,7 @@ class SettingsTab(QWidget):
             self.theme_manager.set_theme(False, theme)
             self.theme_changed.emit()
 
-# 메인 윈도우
+# Main window
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -817,7 +817,7 @@ class MainWindow(QMainWindow):
                 return
         event.accept()
 
-# 메인 함수
+# Main function
 def main():
     app = QApplication(sys.argv)
     font = QFont("Segoe UI", 9)
